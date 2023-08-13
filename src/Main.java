@@ -1,14 +1,28 @@
-import java.util.Map;
-import java.util.Random;
-import java.util.TreeMap;
+import java.util.*;
 
 public class Main {
     public static final Map<Integer, Integer> sizeToFreq = new TreeMap<>();
     public static boolean flag = true;
 
     public static void main(String[] args) {
-
         int THREADS = 1000;
+        Runnable countThread = () -> {
+            while (!Thread.interrupted()) {
+                synchronized (sizeToFreq) {
+                    try {
+                        sizeToFreq.wait();
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    Map.Entry<Integer, Integer> maxEntry = sizeToFreq.entrySet().stream()
+                            .max(Map.Entry.comparingByValue())
+                            .orElse(null);
+                    System.out.println("Map sizeToFreq обновлена, текущий максимум: " + Objects.requireNonNull(maxEntry).getKey());
+                }
+            }
+        };
+        Thread thread1 = new Thread(countThread);
+        thread1.start();
         for (int i = 0; i < THREADS; i++) {
             Runnable logic = () -> {
                 String string = generateRoute("RLRFR", 100);
@@ -20,11 +34,16 @@ public class Main {
                         int count = sizeToFreq.get(res);
                         sizeToFreq.put(res, ++count);
                     } else sizeToFreq.put(res, 1);
+                    sizeToFreq.notify();
                 }
             };
             Thread thread = new Thread(logic);
             thread.start();
+            if (i == THREADS - 1) {
+                thread1.interrupt();
+            }
         }
+
         sizeToFreq.entrySet().stream()
                 .sorted(Map.Entry.<Integer, Integer>comparingByValue().reversed())
                 .forEach(Main::print);
